@@ -1,12 +1,25 @@
 import { Redis } from '@upstash/redis'
 import { DIAS_VACACIONES_ANUALES, contarDiasLaborables, diasSolicitadosEnAnio } from '../src/lib/vacaciones.js'
 
-const redis = Redis.fromEnv()
 const DB_KEY = 'healthymeat:fichajes:db'
 
 const emptyDb = () => ({ fichajes: [], vacaciones: [], estados: {} })
 
-async function loadDb() {
+// Construye el cliente de Redis dentro del handler (no al cargar el archivo) para
+// que, si faltan las variables de entorno, el error salga como un JSON claro en
+// vez de tumbar la función entera.
+function getRedis() {
+  const url = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN
+  if (!url || !token) {
+    throw new Error(
+      'Falta conectar la base de datos: no encuentro UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN en las variables de entorno de Vercel. Ve a Storage → conecta la base de datos Redis a este proyecto → y vuelve a hacer Redeploy.'
+    )
+  }
+  return new Redis({ url, token })
+}
+
+async function loadDb(redis) {
   const data = await redis.get(DB_KEY)
   if (!data) return emptyDb()
   // Upstash puede devolver el objeto ya parseado o como string según el cliente/versión
@@ -20,7 +33,7 @@ async function loadDb() {
   return data
 }
 
-async function saveDb(db) {
+async function saveDb(redis, db) {
   await redis.set(DB_KEY, JSON.stringify(db))
 }
 
@@ -55,8 +68,10 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end()
 
   try {
+    const redis = getRedis()
+
     if (req.method === 'GET') {
-      const db = await loadDb()
+      const db = await loadDb(redis)
       return res.status(200).json(db)
     }
 
@@ -65,7 +80,7 @@ export default async function handler(req, res) {
     }
 
     const { action, payload } = req.body || {}
-    const db = await loadDb()
+    const db = await loadDb(redis)
 
     switch (action) {
       case 'ficharEntrada': {
@@ -90,7 +105,7 @@ export default async function handler(req, res) {
         }
         db.fichajes.push(registro)
         db.estados[employeeId] = { enCurso: true, enPausa: false, fichajeId: registro.id }
-        await saveDb(db)
+        await saveDb(redis, db)
         return res.status(200).json({ ok: true, registro })
       }
 
@@ -107,7 +122,7 @@ export default async function handler(req, res) {
         if (!registro) return res.status(404).json({ error: 'No se encontró el fichaje.' })
         registro.pausas.push({ inicio: horaAhoraMadrid(), fin: null })
         estado.enPausa = true
-        await saveDb(db)
+        await saveDb(redis, db)
         return res.status(200).json({ ok: true, registro })
       }
 
@@ -122,7 +137,7 @@ export default async function handler(req, res) {
         const pausaAbierta = [...registro.pausas].reverse().find((p) => !p.fin)
         if (pausaAbierta) pausaAbierta.fin = horaAhoraMadrid()
         estado.enPausa = false
-        await saveDb(db)
+        await saveDb(redis, db)
         return res.status(200).json({ ok: true, registro })
       }
 
@@ -150,7 +165,7 @@ export default async function handler(req, res) {
         const minsTrabajados = Math.max(0, minsTotales - minsPausas)
         registro.horasTrabajadas = Math.round((minsTrabajados / 60) * 100) / 100
         db.estados[employeeId] = { enCurso: false, enPausa: false, fichajeId: null }
-        await saveDb(db)
+        await saveDb(redis, db)
         return res.status(200).json({ ok: true, registro })
       }
 
@@ -184,7 +199,7 @@ export default async function handler(req, res) {
           fechaResolucion: null,
         }
         db.vacaciones.push(solicitud)
-        await saveDb(db)
+        await saveDb(redis, db)
         return res.status(200).json({ ok: true, solicitud })
       }
 
@@ -197,7 +212,7 @@ export default async function handler(req, res) {
         solicitud.estado = estado
         solicitud.resueltaPor = resueltaPor || 'Gerencia'
         solicitud.fechaResolucion = hoyISO()
-        await saveDb(db)
+        await saveDb(redis, db)
         return res.status(200).json({ ok: true, solicitud })
       }
 
@@ -206,6 +221,6 @@ export default async function handler(req, res) {
     }
   } catch (err) {
     console.error(err)
-    return res.status(500).json({ error: 'Error interno.', detail: String(err) })
+    return res.status(500).json({ error: err.message || 'Error interno.', detail: String(err) })
   }
 }

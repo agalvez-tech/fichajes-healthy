@@ -3,8 +3,25 @@ import { EMPRESAS, EMPLEADOS } from '../data'
 export default function Home({ onSelectEmpresa, onGerencia }) {
   return (
     <div className="screen">
-      <h1 className="page-title">Fichajes</h1>
-      <p className="page-subtitle">Elige tu empresa para fichar o solicitar vacaciones.</p>
+      <div style={{ textAlign: 'center', margin: '12px 0 32px' }}>
+        <img
+          src="/logo.jpg"
+          alt="HealthyMeat"
+          style={{
+            width: 108,
+            height: 108,
+            borderRadius: '50%',
+            border: '1px solid var(--line)',
+            objectFit: 'cover',
+          }}
+        />
+      </div>
+      <h1 className="page-title" style={{ textAlign: 'center' }}>
+        Fichajes
+      </h1>
+      <p className="page-subtitle" style={{ textAlign: 'center' }}>
+        Elige tu empresa para fichar o solicitar vacaciones.
+      </p>
 
       <div className="card-grid">
         {EMPRESAS.map((emp) => {
