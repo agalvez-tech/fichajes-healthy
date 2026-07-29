@@ -12,8 +12,15 @@ function getRedis() {
   const url = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL
   const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN
   if (!url || !token) {
+    const candidatas = Object.keys(process.env).filter((k) =>
+      /REDIS|KV_|UPSTASH/i.test(k)
+    )
+    const detalle =
+      candidatas.length > 0
+        ? `Variables encontradas con nombres parecidos: ${candidatas.join(', ')}.`
+        : 'No encuentro ninguna variable con "REDIS", "KV_" o "UPSTASH" en el nombre en este entorno.'
     throw new Error(
-      'Falta conectar la base de datos: no encuentro UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN en las variables de entorno de Vercel. Ve a Storage → conecta la base de datos Redis a este proyecto → y vuelve a hacer Redeploy.'
+      `Falta conectar la base de datos: no encuentro UPSTASH_REDIS_REST_URL/TOKEN ni KV_REST_API_URL/TOKEN. ${detalle} Ve a Storage → conecta la base de datos Redis a este proyecto → y vuelve a hacer Redeploy.`
     )
   }
   return new Redis({ url, token })
