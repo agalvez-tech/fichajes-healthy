@@ -30,4 +30,11 @@ export const api = {
     }),
   resolverVacaciones: (id, estado, resueltaPor) =>
     call('POST', { action: 'resolverVacaciones', payload: { id, estado, resueltaPor } }),
+  solicitarCorreccion: (employeeId, fichajeId, horaEntrada, horaSalida, motivo) =>
+    call('POST', {
+      action: 'solicitarCorreccion',
+      payload: { employeeId, fichajeId, horaEntrada, horaSalida, motivo },
+    }),
+  resolverCorreccion: (id, estado, resueltaPor) =>
+    call('POST', { action: 'resolverCorreccion', payload: { id, estado, resueltaPor } }),
 }

@@ -20,9 +20,13 @@ Restauración) y se puede filtrar por cada una.
   panel y ve cuántos lleva pedidos y cuántos le quedan ese año (solo cuenta días
   laborables, de lunes a viernes). La app no deja enviar una solicitud que supere los
   22 días — la validación se hace tanto en la pantalla como en el servidor, para que
-  no se pueda saltar. Patricia Lázaro (gerencia) aprueba o rechaza cada solicitud
+  no se pueda saltar. Gerencia aprueba o rechaza cada solicitud
   desde un panel protegido por su propio PIN, y ve el saldo de todos los empleados.
-- **Informes PDF**: Patricia puede filtrar por empresa, empleado y rango de fechas, y
+- **Corregir un fichaje**: si alguien se equivocó al fichar, puede pedir la corrección
+  de un fichaje ya cerrado desde su propio historial ("Editar"). El fichaje se queda
+  igual hasta que gerencia lo aprueba desde la pestaña "Correcciones de fichajes"; al
+  aprobarlo, se actualiza la hora y las horas trabajadas se recalculan solas.
+- **Informes PDF**: Gerencia puede filtrar por empresa, empleado y rango de fechas, y
   descargar un PDF con el resumen de jornadas —incluidas las pausas— para enseñar a
   Inspección de Trabajo si lo pide.
 - **Multiempresa**: los datos de cada empresa están separados y se pueden filtrar.
@@ -34,7 +38,7 @@ personas usan la app a la vez desde el móvil o el ordenador, ambas ven los mism
 
 Abre `src/data.js` y revisa:
 
-- **Patricia Lázaro / PIN de gerencia**: el PIN de ejemplo es `2026`. Cámbialo por uno
+- **PIN de gerencia**: el PIN de ejemplo es `2026`. Cámbialo por uno
   que solo conozca gerencia (misma línea, `pin: '2026'`).
 - **PIN de cada empleado**: por defecto son las 4 últimas cifras del DNI de cada
   persona (campo `pin` en cada empleado de `EMPLEADOS`). Cámbialos si prefieres otros
@@ -66,7 +70,7 @@ Abre `src/data.js` y revisa:
 - Cada empleado entra en la web, elige su empresa, toca su nombre y ficha.
 - Para pedir vacaciones, dentro de su propio panel hay un botón "Solicitar
   vacaciones".
-- Patricia entra por "Acceso gerencia" (abajo de la pantalla de inicio), pone el PIN,
+- Gerencia entra por "Acceso gerencia" (abajo de la pantalla de inicio), pone el PIN,
   y desde ahí aprueba/rechaza vacaciones y descarga los PDF de fichajes.
 
 ## Notas técnicas

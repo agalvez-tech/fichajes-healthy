@@ -108,12 +108,38 @@ export default function App() {
     }
   }
 
+  const solicitarCorreccion = async ({ fichajeId, horaEntrada, horaSalida, motivo }) => {
+    setBusy(true)
+    try {
+      await api.solicitarCorreccion(employeeId, fichajeId, horaEntrada, horaSalida, motivo)
+      await refresh()
+      showToast('Corrección enviada a gerencia.')
+    } catch (err) {
+      showToast(err.message, 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const resolverVacaciones = async (id, estado) => {
     setBusy(true)
     try {
-      await api.resolverVacaciones(id, estado, 'Patricia Lázaro')
+      await api.resolverVacaciones(id, estado, 'Gerencia')
       await refresh()
       showToast(estado === 'aprobada' ? 'Vacaciones aprobadas.' : 'Solicitud rechazada.')
+    } catch (err) {
+      showToast(err.message, 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const resolverCorreccion = async (id, estado) => {
+    setBusy(true)
+    try {
+      await api.resolverCorreccion(id, estado, 'Gerencia')
+      await refresh()
+      showToast(estado === 'aprobada' ? 'Corrección aplicada al fichaje.' : 'Corrección rechazada.')
     } catch (err) {
       showToast(err.message, 'error')
     } finally {
@@ -189,6 +215,7 @@ export default function App() {
           onFicharPausaInicio={ficharPausaInicio}
           onFicharPausaFin={ficharPausaFin}
           onSolicitarVacaciones={solicitarVacaciones}
+          onSolicitarCorreccion={solicitarCorreccion}
         />
       )}
 
@@ -202,6 +229,7 @@ export default function App() {
           busy={busy}
           onBack={() => setScreen('home')}
           onResolverVacaciones={resolverVacaciones}
+          onResolverCorreccion={resolverCorreccion}
         />
       )}
 

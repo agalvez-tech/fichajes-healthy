@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { EMPLEADOS, empresaDe } from '../data'
 import { DIAS_VACACIONES_ANUALES, contarDiasLaborables, diasSolicitadosEnAnio } from '../lib/vacaciones'
 
@@ -21,6 +21,7 @@ export default function EmployeePanel({
   onFicharPausaInicio,
   onFicharPausaFin,
   onSolicitarVacaciones,
+  onSolicitarCorreccion,
 }) {
   const empleado = EMPLEADOS.find((e) => e.id === employeeId)
   const empresa = empresaDe(empleado)
@@ -30,6 +31,42 @@ export default function EmployeePanel({
   const [fechaFin, setFechaFin] = useState('')
   const [motivo, setMotivo] = useState('')
   const [formError, setFormError] = useState('')
+
+  const [editandoId, setEditandoId] = useState(null)
+  const [editEntrada, setEditEntrada] = useState('')
+  const [editSalida, setEditSalida] = useState('')
+  const [editMotivo, setEditMotivo] = useState('')
+  const [editError, setEditError] = useState('')
+
+  const misCorrecciones = (db.correcciones || []).filter((c) => c.employeeId === employeeId)
+  const correccionPendientePara = (fichajeId) =>
+    misCorrecciones.find((c) => c.fichajeId === fichajeId && c.estado === 'pendiente')
+
+  const abrirEdicion = (f) => {
+    setEditandoId(f.id)
+    setEditEntrada(f.horaEntrada)
+    setEditSalida(f.horaSalida)
+    setEditMotivo('')
+    setEditError('')
+  }
+
+  const enviarCorreccion = (e, fichajeId) => {
+    e.preventDefault()
+    setEditError('')
+    if (!editEntrada || !editSalida) return
+    if (editSalida <= editEntrada) {
+      setEditError('La salida tiene que ser posterior a la entrada.')
+      return
+    }
+    onSolicitarCorreccion({
+      fichajeId,
+      horaEntrada: editEntrada,
+      horaSalida: editSalida,
+      motivo: editMotivo,
+    })
+    setEditandoId(null)
+  }
+
 
   const estado = db.estados[employeeId] || {}
   const enCurso = estado.enCurso
@@ -162,18 +199,97 @@ export default function EmployeePanel({
                   <th>Pausa</th>
                   <th>Salida</th>
                   <th>Horas</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
-                {misFichajes.slice(0, 8).map((f) => (
-                  <tr key={f.id}>
-                    <td>{formatearFecha(f.fecha)}</td>
-                    <td>{f.horaEntrada}</td>
-                    <td>{formatearPausas(f.pausas)}</td>
-                    <td>{f.horaSalida || 'En curso'}</td>
-                    <td>{f.horasTrabajadas != null ? `${f.horasTrabajadas.toFixed(2)} h` : '—'}</td>
-                  </tr>
-                ))}
+                {misFichajes.slice(0, 8).map((f) => {
+                  const pendiente = correccionPendientePara(f.id)
+                  return (
+                    <Fragment key={f.id}>
+                      <tr>
+                        <td>
+                          {formatearFecha(f.fecha)}
+                          {f.corregido && <span className="hint" style={{ display: 'block' }}>Corregido</span>}
+                        </td>
+                        <td>{f.horaEntrada}</td>
+                        <td>{formatearPausas(f.pausas)}</td>
+                        <td>{f.horaSalida || 'En curso'}</td>
+                        <td>{f.horasTrabajadas != null ? `${f.horasTrabajadas.toFixed(2)} h` : '—'}</td>
+                        <td>
+                          {pendiente ? (
+                            <span className="stamp pending">Corrección pendiente</span>
+                          ) : f.horaSalida ? (
+                            <button className="link-btn" onClick={() => abrirEdicion(f)}>
+                              Editar
+                            </button>
+                          ) : null}
+                        </td>
+                      </tr>
+                      {editandoId === f.id && (
+                        <tr key={`${f.id}-edit`}>
+                          <td colSpan={6}>
+                            <form
+                              onSubmit={(e) => enviarCorreccion(e, f.id)}
+                              style={{ padding: '8px 0' }}
+                            >
+                              <p className="hint" style={{ marginTop: 0 }}>
+                                Pides que gerencia corrija este fichaje. Se quedará como está hasta que lo
+                                apruebe.
+                              </p>
+                              <div className="row">
+                                <div className="field" style={{ flex: 1, minWidth: 120 }}>
+                                  <label>Entrada</label>
+                                  <input
+                                    type="time"
+                                    value={editEntrada}
+                                    onChange={(e) => setEditEntrada(e.target.value)}
+                                    required
+                                  />
+                                </div>
+                                <div className="field" style={{ flex: 1, minWidth: 120 }}>
+                                  <label>Salida</label>
+                                  <input
+                                    type="time"
+                                    value={editSalida}
+                                    onChange={(e) => setEditSalida(e.target.value)}
+                                    required
+                                  />
+                                </div>
+                              </div>
+                              <div className="field">
+                                <label>Motivo (opcional)</label>
+                                <input
+                                  type="text"
+                                  value={editMotivo}
+                                  onChange={(e) => setEditMotivo(e.target.value)}
+                                  placeholder="Ej. se me olvidó fichar la salida a la hora real"
+                                />
+                              </div>
+                              {editError && (
+                                <p className="pin-error" style={{ textAlign: 'left' }}>
+                                  {editError}
+                                </p>
+                              )}
+                              <div className="row">
+                                <button className="btn gold" type="submit" disabled={busy}>
+                                  Enviar a gerencia
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn ghost"
+                                  onClick={() => setEditandoId(null)}
+                                >
+                                  Cancelar
+                                </button>
+                              </div>
+                            </form>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  )
+                })}
               </tbody>
             </table>
           </div>

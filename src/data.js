@@ -86,7 +86,7 @@ export const EMPLEADOS = [
 // Perfil de gerencia: aprueba/rechaza vacaciones y accede a los informes.
 // Cambia el PIN antes de poner la app en producción (ver README).
 export const GERENCIA = {
-  nombre: 'Patricia Lázaro',
+  nombre: 'Gerencia',
   pin: '2026',
 }
 

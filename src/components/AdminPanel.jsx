@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { EMPRESAS, EMPLEADOS, GERENCIA } from '../data'
+import { EMPRESAS, EMPLEADOS } from '../data'
 import { DIAS_VACACIONES_ANUALES, diasSolicitadosEnAnio } from '../lib/vacaciones'
 import { generarInformePDF } from '../pdf'
 
@@ -10,7 +10,7 @@ function dniEmpleado(id) {
   return EMPLEADOS.find((e) => e.id === id)?.dni || ''
 }
 
-export default function AdminPanel({ db, busy, onBack, onResolverVacaciones }) {
+export default function AdminPanel({ db, busy, onBack, onResolverVacaciones, onResolverCorreccion }) {
   const [tab, setTab] = useState('vacaciones')
   const [filtroEmpresa, setFiltroEmpresa] = useState('todas')
   const [filtroEmpleado, setFiltroEmpleado] = useState('todos')
@@ -22,6 +22,14 @@ export default function AdminPanel({ db, busy, onBack, onResolverVacaciones }) {
     .sort((a, b) => (a.fechaSolicitud < b.fechaSolicitud ? 1 : -1))
   const historicoVacaciones = db.vacaciones
     .filter((v) => v.estado !== 'pendiente')
+    .sort((a, b) => (a.fechaResolucion < b.fechaResolucion ? 1 : -1))
+
+  const correcciones = db.correcciones || []
+  const correccionesPendientes = correcciones
+    .filter((c) => c.estado === 'pendiente')
+    .sort((a, b) => (a.fechaSolicitud < b.fechaSolicitud ? 1 : -1))
+  const correccionesHistorico = correcciones
+    .filter((c) => c.estado !== 'pendiente')
     .sort((a, b) => (a.fechaResolucion < b.fechaResolucion ? 1 : -1))
 
   const enTurnoAhora = Object.entries(db.estados).filter(([, v]) => v?.enCurso).length
@@ -73,7 +81,7 @@ export default function AdminPanel({ db, busy, onBack, onResolverVacaciones }) {
         <div>
           <h1 className="page-title">Gerencia</h1>
           <p className="page-subtitle" style={{ marginBottom: 0 }}>
-            {GERENCIA.nombre} · vacaciones, fichajes e informes
+            Vacaciones, fichajes e informes
           </p>
         </div>
         <button className="btn ghost" onClick={onBack}>
@@ -95,6 +103,10 @@ export default function AdminPanel({ db, busy, onBack, onResolverVacaciones }) {
           <div className="label">Vacaciones pendientes</div>
         </div>
         <div className="summary-item">
+          <div className="num">{correccionesPendientes.length}</div>
+          <div className="label">Correcciones pendientes</div>
+        </div>
+        <div className="summary-item">
           <div className="num">{EMPLEADOS.length}</div>
           <div className="label">Empleados</div>
         </div>
@@ -107,6 +119,12 @@ export default function AdminPanel({ db, busy, onBack, onResolverVacaciones }) {
       <div className="tabs">
         <button className={`tab ${tab === 'vacaciones' ? 'active' : ''}`} onClick={() => setTab('vacaciones')}>
           Vacaciones
+        </button>
+        <button
+          className={`tab ${tab === 'correcciones' ? 'active' : ''}`}
+          onClick={() => setTab('correcciones')}
+        >
+          Correcciones de fichajes
         </button>
         <button className={`tab ${tab === 'fichajes' ? 'active' : ''}`} onClick={() => setTab('fichajes')}>
           Fichajes e informes
@@ -223,6 +241,107 @@ export default function AdminPanel({ db, busy, onBack, onResolverVacaciones }) {
                           </span>
                         </td>
                         <td>{formatearFecha(v.fechaResolucion)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {tab === 'correcciones' && (
+        <>
+          <div className="panel">
+            <h3>Pendientes de aprobar</h3>
+            {correccionesPendientes.length === 0 ? (
+              <p className="empty-state">No hay correcciones de fichajes pendientes.</p>
+            ) : (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Empleado</th>
+                      <th>Fecha</th>
+                      <th>Fichado</th>
+                      <th>Propuesto</th>
+                      <th>Motivo</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {correccionesPendientes.map((c) => (
+                      <tr key={c.id}>
+                        <td>{nombreEmpleado(c.employeeId)}</td>
+                        <td>{formatearFecha(c.fecha)}</td>
+                        <td>
+                          {c.original.horaEntrada} – {c.original.horaSalida}
+                        </td>
+                        <td>
+                          {c.propuesto.horaEntrada} – {c.propuesto.horaSalida}
+                        </td>
+                        <td>{c.motivo || '—'}</td>
+                        <td>
+                          <div className="row">
+                            <button
+                              className="btn gold"
+                              disabled={busy}
+                              onClick={() => onResolverCorreccion(c.id, 'aprobada')}
+                            >
+                              Aprobar
+                            </button>
+                            <button
+                              className="btn danger"
+                              disabled={busy}
+                              onClick={() => onResolverCorreccion(c.id, 'rechazada')}
+                            >
+                              Rechazar
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <div className="panel">
+            <h3>Historial de correcciones</h3>
+            {correccionesHistorico.length === 0 ? (
+              <p className="empty-state">Todavía no hay correcciones resueltas.</p>
+            ) : (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Empleado</th>
+                      <th>Fecha</th>
+                      <th>Fichado</th>
+                      <th>Propuesto</th>
+                      <th>Estado</th>
+                      <th>Resuelta</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {correccionesHistorico.map((c) => (
+                      <tr key={c.id}>
+                        <td>{nombreEmpleado(c.employeeId)}</td>
+                        <td>{formatearFecha(c.fecha)}</td>
+                        <td>
+                          {c.original.horaEntrada} – {c.original.horaSalida}
+                        </td>
+                        <td>
+                          {c.propuesto.horaEntrada} – {c.propuesto.horaSalida}
+                        </td>
+                        <td>
+                          <span className={`stamp ${c.estado}`}>
+                            {c.estado === 'aprobada' ? 'Aprobada' : 'Rechazada'}
+                          </span>
+                        </td>
+                        <td>{formatearFecha(c.fechaResolucion)}</td>
                       </tr>
                     ))}
                   </tbody>

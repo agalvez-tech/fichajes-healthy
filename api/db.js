@@ -3,7 +3,7 @@ import { DIAS_VACACIONES_ANUALES, contarDiasLaborables, diasSolicitadosEnAnio } 
 
 const DB_KEY = 'healthymeat:fichajes:db'
 
-const emptyDb = () => ({ fichajes: [], vacaciones: [], estados: {} })
+const emptyDb = () => ({ fichajes: [], vacaciones: [], correcciones: [], estados: {} })
 
 // Construye el cliente de Redis dentro del handler (no al cargar el archivo) para
 // que, si faltan las variables de entorno, el error salga como un JSON claro en
@@ -29,15 +29,19 @@ function getRedis() {
 async function loadDb(redis) {
   const data = await redis.get(DB_KEY)
   if (!data) return emptyDb()
+  let db
   // Upstash puede devolver el objeto ya parseado o como string según el cliente/versión
   if (typeof data === 'string') {
     try {
-      return JSON.parse(data)
+      db = JSON.parse(data)
     } catch {
       return emptyDb()
     }
+  } else {
+    db = data
   }
-  return data
+  if (!db.correcciones) db.correcciones = []
+  return db
 }
 
 async function saveDb(redis, db) {
@@ -221,6 +225,74 @@ export default async function handler(req, res) {
         solicitud.fechaResolucion = hoyISO()
         await saveDb(redis, db)
         return res.status(200).json({ ok: true, solicitud })
+      }
+
+      case 'solicitarCorreccion': {
+        const { employeeId, fichajeId, horaEntrada, horaSalida, motivo } = payload
+        const registro = db.fichajes.find((f) => f.id === fichajeId && f.employeeId === employeeId)
+        if (!registro) {
+          return res.status(404).json({ error: 'No se encontró ese fichaje.' })
+        }
+        if (!registro.horaSalida) {
+          return res.status(409).json({ error: 'Solo puedes corregir jornadas ya finalizadas (con salida fichada).' })
+        }
+        if (!horaEntrada || !horaSalida) {
+          return res.status(400).json({ error: 'Indica la hora de entrada y de salida.' })
+        }
+        if (minutos(horaSalida) <= minutos(horaEntrada)) {
+          return res.status(400).json({ error: 'La hora de salida tiene que ser posterior a la de entrada.' })
+        }
+        const yaPendiente = db.correcciones.find((c) => c.fichajeId === fichajeId && c.estado === 'pendiente')
+        if (yaPendiente) {
+          return res.status(409).json({ error: 'Ya hay una corrección pendiente de aprobar para este fichaje.' })
+        }
+        const correccion = {
+          id: id(),
+          fichajeId,
+          employeeId,
+          empresaId: registro.empresaId,
+          fecha: registro.fecha,
+          original: { horaEntrada: registro.horaEntrada, horaSalida: registro.horaSalida },
+          propuesto: { horaEntrada, horaSalida },
+          motivo: motivo || '',
+          estado: 'pendiente',
+          fechaSolicitud: hoyISO(),
+          resueltaPor: null,
+          fechaResolucion: null,
+        }
+        db.correcciones.push(correccion)
+        await saveDb(redis, db)
+        return res.status(200).json({ ok: true, correccion })
+      }
+
+      case 'resolverCorreccion': {
+        const { id: correccionId, estado, resueltaPor } = payload
+        const correccion = db.correcciones.find((c) => c.id === correccionId)
+        if (!correccion) {
+          return res.status(404).json({ error: 'Corrección no encontrada.' })
+        }
+        if (correccion.estado !== 'pendiente') {
+          return res.status(409).json({ error: 'Esta corrección ya estaba resuelta.' })
+        }
+        if (estado === 'aprobada') {
+          const registro = db.fichajes.find((f) => f.id === correccion.fichajeId)
+          if (registro) {
+            registro.horaEntrada = correccion.propuesto.horaEntrada
+            registro.horaSalida = correccion.propuesto.horaSalida
+            const minsPausas = (registro.pausas || []).reduce((acc, p) => {
+              if (!p.fin) return acc
+              return acc + Math.max(0, minutos(p.fin) - minutos(p.inicio))
+            }, 0)
+            const minsTotales = Math.max(0, minutos(registro.horaSalida) - minutos(registro.horaEntrada))
+            registro.horasTrabajadas = Math.round((Math.max(0, minsTotales - minsPausas) / 60) * 100) / 100
+            registro.corregido = true
+          }
+        }
+        correccion.estado = estado
+        correccion.resueltaPor = resueltaPor || 'Gerencia'
+        correccion.fechaResolucion = hoyISO()
+        await saveDb(redis, db)
+        return res.status(200).json({ ok: true, correccion })
       }
 
       default:
